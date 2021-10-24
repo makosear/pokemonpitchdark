@@ -338,6 +338,7 @@
 // Evolution types
 #define EVO_MEGA_EVOLUTION                0xffff // Not an actual evolution, used to temporarily mega evolve in battle.
 #define EVO_MOVE_MEGA_EVOLUTION           0xfffe // Mega Evolution that checks for a move instead of held item.
+#define EVO_PRIMAL_REVERSION              0xfffd // Not an actual evolution, used to undergo primal reversion in battle.
 #define EVO_FRIENDSHIP                    1      // Pokémon levels up with friendship ≥ 220
 #define EVO_FRIENDSHIP_DAY                2      // Pokémon levels up during the day with friendship ≥ 220
 #define EVO_FRIENDSHIP_NIGHT              3      // Pokémon levels up at night with friendship ≥ 220
@@ -378,6 +379,15 @@
 #define EVO_MODE_TRADE      1
 #define EVO_MODE_ITEM_USE   2
 #define EVO_MODE_ITEM_CHECK 3 // If an Everstone is being held, still want to show that the stone *could* be used on that Pokémon to evolve
+
+// Form change types
+#define FORM_CHANGE_END         0
+#define FORM_ITEM_HOLD          1
+#define FORM_ITEM_USE           2
+#define FORM_MOVE               3
+#define FORM_WITHDRAW           4
+#define FORM_ITEM_HOLD_ABILITY  5
+#define FORM_ITEM_USE_TIME      6
 
 #define NUM_MALE_LINK_FACILITY_CLASSES   8
 #define NUM_FEMALE_LINK_FACILITY_CLASSES 8
