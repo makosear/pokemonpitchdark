@@ -1564,6 +1564,9 @@ const struct CompressedSpriteSheet gBattleAnimPicTable[] =
     {gBattleAnimSpriteGfx_DreepyMissile, 0x200, ANIM_TAG_DREEPY},
     {gBattleAnimSpriteGfx_IceRock, 0x1800, ANIM_TAG_ICE_ROCK_SINGLE},
     {gBattleAnimSpriteGfx_StonePillar, 0x1800, ANIM_TAG_STONE_PILLAR_MULTI},
+    {gBattleAnimSpriteGfx_AlphaSymbol, 0x0200, ANIM_TAG_ALPHA_SYMBOL},
+    {gBattleAnimSpriteGfx_OmegaSymbol, 0x0200, ANIM_TAG_OMEGA_SYMBOL},
+    {gBattleAnimSpriteGfx_PrimalParticles, 0x0180, ANIM_TAG_PRIMAL_PARTICLES},
 };
 
 const struct CompressedSpritePalette gBattleAnimPaletteTable[] =
@@ -2011,6 +2014,9 @@ const struct CompressedSpritePalette gBattleAnimPaletteTable[] =
     {gBattleAnimSpritePal_DreepyMissile, ANIM_TAG_DREEPY},
     {gBattleAnimSpritePal_IceRock, ANIM_TAG_ICE_ROCK_SINGLE},
     {gBattleAnimSpritePal_StonePillar, ANIM_TAG_STONE_PILLAR_MULTI},
+    {gBattleAnimSpritePal_AlphaSymbol, ANIM_TAG_ALPHA_SYMBOL},
+    {gBattleAnimSpritePal_OmegaSymbol, ANIM_TAG_OMEGA_SYMBOL},
+    {gBattleAnimSpritePal_PrimalParticles, ANIM_TAG_PRIMAL_PARTICLES},
 };
 
 const struct BattleAnimBackground gBattleAnimBackgroundTable[] =
@@ -2213,6 +2219,7 @@ void LaunchBattleAnimation(const u8 *const animsTable[], u16 tableId, bool8 isMo
         case B_ANIM_DOOM_DESIRE_HIT:
         case B_ANIM_WISH_HEAL:
         case B_ANIM_MEGA_EVOLUTION:
+        case B_ANIM_GULP_MISSILE:
             hideHpBoxes = TRUE;
             break;
         default:
@@ -3227,7 +3234,7 @@ static void LoadDefaultBg(void)
     if (IsContest())
         LoadContestBgAfterMoveAnim();
     #if B_TERRAIN_BG_CHANGE == TRUE
-    else if (gFieldStatuses & STATUS_TERRAIN_ANY)
+    else if (gFieldStatuses & STATUS_FIELD_TERRAIN_ANY)
         DrawTerrainTypeBattleBackground();
     #endif
     else

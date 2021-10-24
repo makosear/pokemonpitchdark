@@ -177,10 +177,10 @@ void BattleAI_SetupAIData(u8 defaultScoreMoves)
     }
 
     sBattler_AI = gActiveBattler;
-    // Simulate dmg for all AI moves against all opposing targets
+    // Simulate dmg for all AI moves against all other targets
     for (gBattlerTarget = 0; gBattlerTarget < gBattlersCount; gBattlerTarget++)
     {
-        if (GET_BATTLER_SIDE2(sBattler_AI) == GET_BATTLER_SIDE2(gBattlerTarget))
+        if (sBattler_AI == gBattlerTarget)
             continue;
         for (i = 0; i < MAX_MON_MOVES; i++)
         {
@@ -209,7 +209,11 @@ u8 BattleAI_ChooseMoveOrAction(void)
         ret = ChooseMoveOrAction_Singles();
     else
         ret = ChooseMoveOrAction_Doubles();
-
+    
+    // Clear protect structures, some flags may be set during AI calcs
+    // e.g. pranksterElevated from GetMovePriority
+    memset(&gProtectStructs[gActiveBattler], 0, sizeof(struct ProtectStruct));
+    
     gCurrentMove = savedCurrentMove;
     return ret;
 }
@@ -262,8 +266,10 @@ static u8 ChooseMoveOrAction_Singles(void)
         AI_THINKING_STRUCT->movesetIndex = 0;
     }
 
-    for (i = 0; i < MAX_MON_MOVES; i++)
+    for (i = 0; i < MAX_MON_MOVES; i++) {
         gBattleStruct->aiFinalScore[sBattler_AI][gBattlerTarget][i] = AI_THINKING_STRUCT->score[i];
+        gBattleStruct->aiSimulatedDamage[sBattler_AI][gBattlerTarget][i] = AI_THINKING_STRUCT->simulatedDmg[sBattler_AI][gBattlerTarget][i];
+    }
 
     // Check special AI actions.
     if (AI_THINKING_STRUCT->aiAction & AI_ACTION_FLEE)
@@ -428,8 +434,10 @@ static u8 ChooseMoveOrAction_Doubles(void)
                 }
             }
 
-            for (j = 0; j < MAX_MON_MOVES; j++)
+            for (j = 0; j < MAX_MON_MOVES; j++) {
                 gBattleStruct->aiFinalScore[sBattler_AI][gBattlerTarget][j] = AI_THINKING_STRUCT->score[j];
+                gBattleStruct->aiSimulatedDamage[sBattler_AI][gBattlerTarget][j] = AI_THINKING_STRUCT->simulatedDmg[sBattler_AI][gBattlerTarget][j];
+            }
         }
     }
 
@@ -512,16 +520,21 @@ static s16 AI_CheckBadMove(u8 battlerAtk, u8 battlerDef, u16 move, s16 score)
     // move data
     u8 atkPriority = GetMovePriority(battlerAtk, move);
     u16 moveEffect = gBattleMoves[move].effect;
-    u8 moveType = gBattleMoves[move].type;
-    u8 moveTarget = gBattleMoves[move].target;
+    s32 moveType;
+    u16 moveTarget = gBattleMoves[move].target;
     u16 accuracy = AI_GetMoveAccuracy(battlerAtk, battlerDef, AI_DATA->atkAbility, AI_DATA->defAbility, AI_DATA->atkHoldEffect, AI_DATA->defHoldEffect, move);
     u8 effectiveness = AI_GetMoveEffectiveness(move, battlerAtk, battlerDef);
     bool32 isDoubleBattle = IsValidDoubleBattle(battlerAtk);
     u32 i;
     u16 predictedMove = gLastMoves[battlerDef]; // TODO better move prediction
     
+    SetTypeBeforeUsingMove(move, battlerAtk);
+    GET_MOVE_TYPE(move, moveType);
+
     if (IsTargetingPartner(battlerAtk, battlerDef))
         return score;
+
+    GET_MOVE_TYPE(move, moveType);
     
     // check non-user target
     if (!(gBattleMoves[move].target & MOVE_TARGET_USER))
@@ -748,7 +761,34 @@ static s16 AI_CheckBadMove(u8 battlerAtk, u8 battlerDef, u16 move, s16 score)
     if (gStatuses3[battlerAtk] & STATUS3_HEAL_BLOCK && IsHealBlockPreventingMove(battlerAtk, move))
         return 0; // Can't even select heal blocked move
     // primal weather check
-    //TODO
+    if (WEATHER_HAS_EFFECT)
+    {
+        if (gBattleWeather & WEATHER_PRIMAL_ANY)
+        {
+            switch (move)
+            {
+                case MOVE_SUNNY_DAY:
+                case MOVE_RAIN_DANCE:
+                case MOVE_HAIL:
+                case MOVE_SANDSTORM:
+                    RETURN_SCORE_MINUS(30);
+            }
+        }
+
+        if (!IS_MOVE_STATUS(move))
+        {
+            if (gBattleWeather & WEATHER_SUN_PRIMAL)
+            {
+                if (moveType == TYPE_WATER)
+                    RETURN_SCORE_MINUS(30);
+            }
+            else if (gBattleWeather & WEATHER_RAIN_PRIMAL)
+            {
+                if (moveType == TYPE_FIRE)
+                    RETURN_SCORE_MINUS(30);
+            }
+        }
+    }
     
     // check move effects
     switch (moveEffect)
@@ -792,19 +832,15 @@ static s16 AI_CheckBadMove(u8 battlerAtk, u8 battlerDef, u16 move, s16 score)
             if (!BattlerStatCanRise(battlerAtk, AI_DATA->atkAbility, STAT_ATK) || !HasMoveWithSplit(battlerAtk, SPLIT_PHYSICAL))
                 score -= 10;
             break;
-        case EFFECT_DEFENSE_UP_2:
-            if (move == MOVE_STUFF_CHEEKS && ItemId_GetPocket(gBattleMons[battlerAtk].item) != POCKET_BERRIES)
-                score -= 10;
+        case EFFECT_STUFF_CHEEKS:
+            if (ItemId_GetPocket(gBattleMons[battlerAtk].item) != POCKET_BERRIES)
+                return 0;   // cannot even select
             //fallthrough
         case EFFECT_DEFENSE_UP:
+        case EFFECT_DEFENSE_UP_2:
         case EFFECT_DEFENSE_UP_3:
         case EFFECT_DEFENSE_CURL:
             if (!BattlerStatCanRise(battlerAtk, AI_DATA->atkAbility, STAT_DEF))
-                score -= 10;
-            break;
-        case EFFECT_SPEED_UP:
-        case EFFECT_SPEED_UP_2:
-            if (!BattlerStatCanRise(battlerAtk, AI_DATA->atkAbility, STAT_SPEED))
                 score -= 10;
             break;
         case EFFECT_SPECIAL_ATTACK_UP:
@@ -1204,7 +1240,7 @@ static s16 AI_CheckBadMove(u8 battlerAtk, u8 battlerDef, u16 move, s16 score)
             break;
         case EFFECT_DISABLE:
             if (gDisableStructs[battlerDef].disableTimer == 0
-              && (B_MENTAL_HERB >= GEN_5 && AI_DATA->defHoldEffect != HOLD_EFFECT_CURE_ATTRACT)
+              && (B_MENTAL_HERB >= GEN_5 && AI_DATA->defHoldEffect != HOLD_EFFECT_MENTAL_HERB)
               && !PartnerHasSameMoveEffectWithoutTarget(AI_DATA->battlerAtkPartner, move, AI_DATA->partnerMove))
             {
                 if (GetWhoStrikesFirst(battlerAtk, battlerDef, TRUE) == 0) // attacker should go first
@@ -1224,7 +1260,7 @@ static s16 AI_CheckBadMove(u8 battlerAtk, u8 battlerDef, u16 move, s16 score)
             break;
         case EFFECT_ENCORE:
             if (gDisableStructs[battlerDef].encoreTimer == 0
-              && (B_MENTAL_HERB >= GEN_5 && AI_DATA->defHoldEffect != HOLD_EFFECT_CURE_ATTRACT)
+              && (B_MENTAL_HERB >= GEN_5 && AI_DATA->defHoldEffect != HOLD_EFFECT_MENTAL_HERB)
               && !DoesPartnerHaveSameMoveEffect(AI_DATA->battlerAtkPartner, battlerDef, move, AI_DATA->partnerMove))
             {
                 if (GetWhoStrikesFirst(battlerAtk, battlerDef, TRUE) == 0) // attacker should go first
@@ -1458,7 +1494,7 @@ static s16 AI_CheckBadMove(u8 battlerAtk, u8 battlerDef, u16 move, s16 score)
                 break;
             }
             
-            if (B_MENTAL_HERB >= GEN_5 && AI_DATA->defHoldEffect == HOLD_EFFECT_CURE_ATTRACT)
+            if (B_MENTAL_HERB >= GEN_5 && AI_DATA->defHoldEffect == HOLD_EFFECT_MENTAL_HERB)
                 score -= 6;
             break;
         case EFFECT_WILL_O_WISP:
@@ -1570,7 +1606,7 @@ static s16 AI_CheckBadMove(u8 battlerAtk, u8 battlerDef, u16 move, s16 score)
                 score -= 10;
             break;
         case EFFECT_REST:
-            if (!CanSleep(battlerAtk, AI_DATA->atkAbility))
+            if (!AI_CanSleep(battlerAtk, AI_DATA->atkAbility))
                 score -= 10;
             //fallthrough
         case EFFECT_RESTORE_HP:
@@ -2434,13 +2470,32 @@ static s16 AI_TryToFaint(u8 battlerAtk, u8 battlerDef, u16 move, s16 score)
         switch (AI_GetMoveEffectiveness(move, battlerAtk, battlerDef))
         {
         case AI_EFFECTIVENESS_x4:
-            score += 4;
+            if (WEATHER_HAS_EFFECT
+             && gBattleWeather & WEATHER_STRONG_WINDS
+             && IS_BATTLER_OF_TYPE(battlerDef, TYPE_FLYING))
+            {
+                if (AI_RandLessThan(176)) //Consider it supereffective instead of hypereffective.
+                    score += 2;
+                else
+                    score++;
+            }
+            else
+                score += 4;
             break;
         case AI_EFFECTIVENESS_x2:
-            if (AI_RandLessThan(176))
-                score += 2;
+            if (WEATHER_HAS_EFFECT
+             && gBattleWeather & WEATHER_STRONG_WINDS
+             && IS_BATTLER_OF_TYPE(battlerDef, TYPE_FLYING))
+            {
+                break; // Don't increase score, consider it neutral.
+            }
             else
-                score++;
+            {
+                if (AI_RandLessThan(176))
+                    score += 2;
+                else
+                    score++;
+            }
             break;
         }
     }
@@ -2463,7 +2518,7 @@ static s16 AI_DoubleBattle(u8 battlerAtk, u8 battlerDef, u16 move, s16 score)
     // move data
     u8 moveType = gBattleMoves[move].type;
     u16 effect = gBattleMoves[move].effect;
-    u8 target = gBattleMoves[move].target;
+    u16 target = gBattleMoves[move].target;
     // ally data
     u8 battlerAtkPartner = AI_DATA->battlerAtkPartner;
     u16 atkPartnerAbility = AI_DATA->atkPartnerAbility;
@@ -2472,7 +2527,10 @@ static s16 AI_DoubleBattle(u8 battlerAtk, u8 battlerDef, u16 move, s16 score)
     bool32 attackerHasBadAbility = (GetAbilityRating(AI_DATA->atkAbility) < 0);
     bool32 partnerHasBadAbility = (GetAbilityRating(atkPartnerAbility) < 0);
     u16 predictedMove = gLastMoves[battlerDef]; //for now
-        
+
+    SetTypeBeforeUsingMove(move, battlerAtk);
+    GET_MOVE_TYPE(move, moveType);
+
     // check what effect partner is using
     if (AI_DATA->partnerMove != 0)
     {
@@ -2686,7 +2744,7 @@ static s16 AI_DoubleBattle(u8 battlerAtk, u8 battlerDef, u16 move, s16 score)
             case EFFECT_SWAGGER:
                 if (gBattleMons[battlerAtkPartner].statStages[STAT_ATK] < MAX_STAT_STAGE
                  && HasMoveWithSplit(battlerAtkPartner, SPLIT_PHYSICAL)
-                 && (!CanBeConfused(battlerAtkPartner, TRUE)
+                 && (!AI_CanBeConfused(battlerAtkPartner, TRUE)
                   || atkPartnerHoldEffect == HOLD_EFFECT_CURE_CONFUSION
                   || atkPartnerHoldEffect == HOLD_EFFECT_CURE_STATUS))
                 {
@@ -2696,7 +2754,7 @@ static s16 AI_DoubleBattle(u8 battlerAtk, u8 battlerDef, u16 move, s16 score)
             case EFFECT_FLATTER:
                 if (gBattleMons[battlerAtkPartner].statStages[STAT_SPATK] < MAX_STAT_STAGE
                  && HasMoveWithSplit(battlerAtkPartner, SPLIT_SPECIAL)
-                 && (!CanBeConfused(battlerAtkPartner, TRUE)
+                 && (!AI_CanBeConfused(battlerAtkPartner, TRUE)
                   || atkPartnerHoldEffect == HOLD_EFFECT_CURE_CONFUSION
                   || atkPartnerHoldEffect == HOLD_EFFECT_CURE_STATUS))
                 {
@@ -3248,7 +3306,7 @@ static s16 AI_CheckViability(u8 battlerAtk, u8 battlerDef, u16 move, s16 score)
         }
         break;
     case EFFECT_REST:
-        if (!(CanSleep(battlerAtk, AI_DATA->atkAbility)))
+        if (!(AI_CanSleep(battlerAtk, AI_DATA->atkAbility)))
         {
             break;
         }
@@ -3309,6 +3367,10 @@ static s16 AI_CheckViability(u8 battlerAtk, u8 battlerDef, u16 move, s16 score)
     case EFFECT_PARALYZE:
         IncreaseParalyzeScore(battlerAtk, battlerDef, move, &score);
         break;
+    case EFFECT_GRAV_APPLE:
+        if (gFieldStatuses & STATUS_FIELD_GRAVITY)
+            score += 2;
+        // fall through
     case EFFECT_ATTACK_DOWN_HIT:
     case EFFECT_DEFENSE_DOWN_HIT:
     case EFFECT_SPECIAL_ATTACK_DOWN_HIT:
@@ -3408,7 +3470,7 @@ static s16 AI_CheckViability(u8 battlerAtk, u8 battlerDef, u16 move, s16 score)
         break;
     case EFFECT_DISABLE:
         if (gDisableStructs[battlerDef].disableTimer == 0
-          && (B_MENTAL_HERB >= GEN_5 && AI_DATA->defHoldEffect != HOLD_EFFECT_CURE_ATTRACT))    // mental herb
+          && (B_MENTAL_HERB >= GEN_5 && AI_DATA->defHoldEffect != HOLD_EFFECT_MENTAL_HERB))    // mental herb
         {
             if (GetWhoStrikesFirst(battlerAtk, battlerDef, TRUE) == 0)  // AI goes first
             {
@@ -3430,7 +3492,7 @@ static s16 AI_CheckViability(u8 battlerAtk, u8 battlerDef, u16 move, s16 score)
         break;
     case EFFECT_ENCORE:
         if (gDisableStructs[battlerDef].encoreTimer == 0
-          && (B_MENTAL_HERB >= GEN_5 && AI_DATA->defHoldEffect != HOLD_EFFECT_CURE_ATTRACT))    // mental herb
+          && (B_MENTAL_HERB >= GEN_5 && AI_DATA->defHoldEffect != HOLD_EFFECT_MENTAL_HERB))    // mental herb
         {
             if (IsEncoreEncouragedEffect(gBattleMoves[gLastMoves[battlerDef]].effect))
                 score += 3;
@@ -3937,11 +3999,11 @@ static s16 AI_CheckViability(u8 battlerAtk, u8 battlerDef, u16 move, s16 score)
                 score += 2;
             break;
         case HOLD_EFFECT_TOXIC_ORB:
-            if (!ShouldPoisonSelf(battlerAtk, AI_DATA->atkAbility) && CanBePoisoned(battlerDef, AI_DATA->defAbility))
+            if (!ShouldPoisonSelf(battlerAtk, AI_DATA->atkAbility) && AI_CanBePoisoned(battlerDef, AI_DATA->defAbility))
                 score += 2;
             break;
         case HOLD_EFFECT_FLAME_ORB:
-            if (!ShouldBurnSelf(battlerAtk, AI_DATA->atkAbility) && CanBeBurned(battlerAtk, AI_DATA->defAbility))
+            if (!ShouldBurnSelf(battlerAtk, AI_DATA->atkAbility) && AI_CanBeBurned(battlerAtk, AI_DATA->defAbility))
                 score += 2;
             break;
         case HOLD_EFFECT_BLACK_SLUDGE:
@@ -4751,7 +4813,10 @@ static s16 AI_HPAware(u8 battlerAtk, u8 battlerDef, u16 move, s16 score)
 {
     u16 effect = gBattleMoves[move].effect;
     u8 moveType = gBattleMoves[move].type;
-    
+
+    SetTypeBeforeUsingMove(move, battlerAtk);
+    GET_MOVE_TYPE(move, moveType);
+
     if (IsTargetingPartner(battlerAtk, battlerDef))
     {
         if ((effect == EFFECT_HEAL_PULSE || effect == EFFECT_HIT_ENEMY_HEAL_ALLY)

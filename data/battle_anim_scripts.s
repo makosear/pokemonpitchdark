@@ -4,6 +4,7 @@
 #include "constants/songs.h"
 #include "constants/moves.h"
 #include "constants/pokemon.h"
+#include "constants/items.h"
 	.include "asm/macros.inc"
 	.include "asm/macros/battle_anim_script.inc"
 	.include "constants/constants.inc"
@@ -532,7 +533,7 @@ gBattleAnims_Moves::
 	.4byte Move_QUASH
 	.4byte Move_ACROBATICS
 	.4byte Move_REFLECT_TYPE
-	.4byte Move_RETALITATE
+	.4byte Move_RETALIATE
 	.4byte Move_FINAL_GAMBIT
 	.4byte Move_BESTOW
 	.4byte Move_INFERNO
@@ -822,6 +823,9 @@ gBattleAnims_General::
 	.4byte General_SlideOffScreen           @ B_ANIM_SLIDE_OFFSCREEN
 	.4byte General_RestoreBg                @ B_ANIM_RESTORE_BG
 	.4byte General_TotemFlare               @ B_ANIM_TOTEM_FLARE
+	.4byte General_GulpMissile              @ B_ANIM_GULP_MISSILE
+	.4byte General_StrongWinds              @ B_ANIM_STRONG_WINDS
+	.4byte General_PrimalReversion          @ B_ANIM_PRIMAL_REVERSION
 
 	.align 2
 gBattleAnims_Special::
@@ -5372,6 +5376,31 @@ ScaldHitSplats:
 	return
 
 Move_SHELL_SMASH:
+	loadspritegfx ANIM_TAG_SHELL_RIGHT
+	loadspritegfx ANIM_TAG_SHELL_LEFT
+	loadspritegfx ANIM_TAG_IMPACT
+	loadspritegfx ANIM_TAG_ROCKS
+	loadspritegfx ANIM_TAG_HANDS_AND_FEET
+	playsewithpan SE_M_SCRATCH, SOUND_PAN_ATTACKER
+	createsprite gShellSmashRightShellSpriteTemplate, ANIM_ATTACKER, 2, 0xffd7, 0x0, 0x2, 0x333, 0x0, 0xa
+	createsprite gShellSmashLeftShellSpriteTemplate, ANIM_ATTACKER, 2, 0x20, 0x0, 0x6, 0xfccd, 0x0, 0xa
+	delay 10
+	createsprite gBasicHitSplatSpriteTemplate, ANIM_ATTACKER, 2, 0x0, 0x0, 0x1, 0x1
+	createsprite gFistFootSpriteTemplate, ANIM_ATTACKER, 3, 0x0, 0x0, 0x8, 0x1, 0x0
+	playsewithpan SE_M_ICY_WIND, SOUND_PAN_TARGET
+	createvisualtask AnimTask_ShakeMon, 2, 1, 3, 0, 5, 1
+	waitforvisualfinish
+	playsewithpan SE_M_BUBBLE, SOUND_PAN_TARGET
+	createsprite gShellSmashPurpleRocksSpriteTemplate, ANIM_ATTACKER, 2, 0x0, 0x0, 0x14, 0x18, 0xe, 0x2
+	createsprite gShellSmashPurpleRocksSpriteTemplate, ANIM_ATTACKER, 2, 0x5, 0x0, 0xffec, 0x18, 0xe, 0x1
+	createsprite gShellSmashPurpleRocksSpriteTemplate, ANIM_ATTACKER, 2, 0x0, 0x5, 0x14, 0xffe8, 0xe, 0x2
+	createsprite gShellSmashPurpleRocksSpriteTemplate, ANIM_ATTACKER, 2, 0xfffb, 0x0, 0xffec, 0xffe8, 0xe, 0x2
+	createsprite gShellSmashPurpleRocksSpriteTemplate, ANIM_ATTACKER, 2, 0x0, 0xfffb, 0x1e, 0x12, 0x8, 0x2
+	createsprite gShellSmashPurpleRocksSpriteTemplate, ANIM_ATTACKER, 2, 0x0, 0x0, 0x1e, 0xffee, 0x8, 0x2
+	createsprite gShellSmashPurpleRocksSpriteTemplate, ANIM_ATTACKER, 2, 0x0, 0x0, 0xffe2, 0x12, 0x8, 0x2
+	createsprite gShellSmashPurpleRocksSpriteTemplate, ANIM_ATTACKER, 2, 0x0, 0x0, 0xffe2, 0xffee, 0x8, 0x2
+	createvisualtask AnimTask_ShakeMon, 2, 1, 0, 3, 7, 1
+	waitforvisualfinish
 	end
 
 Move_HEAL_PULSE:
@@ -5610,7 +5639,7 @@ Move_REFLECT_TYPE:
 	blendoff
 	end
 
-Move_RETALITATE:
+Move_RETALIATE:
 	loadspritegfx ANIM_TAG_CUT @Cut
 	monbg ANIM_DEF_PARTNER
 	setalpha 9, 8
@@ -13481,7 +13510,7 @@ Move_BODY_PRESS::
 	end
 
 Move_DECORATE::
-	end @to do:
+	goto Move_FLOWER_SHIELD
 
 Move_DRUM_BEATING::
 	loadspritegfx ANIM_TAG_MUSIC_NOTES
@@ -13957,7 +13986,7 @@ Move_EXPANDING_FORCE::
 	end @to do:
 
 Move_STEEL_ROLLER::
-	end @to do:
+	goto Move_GYRO_BALL
 
 Move_SCALE_SHOT::
 	end @to do:
@@ -13984,7 +14013,7 @@ Move_SKITTER_SMACK::
 	end @to do:
 
 Move_BURNING_JEALOUSY::
-	end @to do:
+	goto Move_OVERHEAT
 
 Move_LASH_OUT::
 	end @to do:
@@ -14011,7 +14040,7 @@ Move_SCORCHING_SANDS::
 	end @to do:
 
 Move_JUNGLE_HEALING::
-	end @to do:
+	goto Move_AROMATHERAPY
 
 Move_WICKED_BLOW::
 	end @to do:
@@ -24406,6 +24435,104 @@ RainbowEndureEffect:
 	delay 0x3
 	launchtemplate gYellowEndureEnergySpriteTemplate 0x2 0x4 0x0 0x1c 0x1a 0x3
 	delay 0x3
+	return
+
+General_GulpMissile: @ Tackle anim (placeholder)
+	loadspritegfx ANIM_TAG_IMPACT
+	monbg ANIM_ATTACKER
+	setalpha 12, 8
+	createsprite gHorizontalLungeSpriteTemplate, ANIM_ATTACKER, 2, 4, 4
+	delay 6
+	createsprite gBasicHitSplatSpriteTemplate, ANIM_ATTACKER, 2, 0, 0, ANIM_ATTACKER, 2
+	createvisualtask AnimTask_ShakeMon, 2, ANIM_ATTACKER, 3, 0, 6, 1
+	playsewithpan SE_M_COMET_PUNCH, SOUND_PAN_TARGET
+	waitforvisualfinish
+	clearmonbg ANIM_ATTACKER
+	blendoff
+	end
+
+General_StrongWinds::
+	loadspritegfx ANIM_TAG_FLYING_DIRT
+	playsewithpan SE_M_GUST, 0
+	createvisualtask AnimTask_BlendParticle, 5, ANIM_TAG_FLYING_DIRT, 0, 12, 12, RGB(20, 20, 20)
+	waitforvisualfinish
+	createvisualtask AnimTask_LoadWindstormBackground, 5, FALSE
+	delay 32
+	waitforvisualfinish
+	stopsound
+	end
+
+General_PrimalReversion::
+	launchtask AnimTask_PrimalReversion 0x5 0x0
+	jumpargeq 0x0, ITEM_RED_ORB, General_PrimalReversion_Omega
+	jumpargeq 0x1, ITEM_BLUE_ORB, General_PrimalReversion_Alpha
+General_PrimalReversion_Alpha:
+	loadspritegfx ANIM_TAG_ALPHA_STONE
+	loadspritegfx ANIM_TAG_PRIMAL_PARTICLES
+	loadspritegfx ANIM_TAG_ALPHA_SYMBOL
+	monbg ANIM_ATTACKER
+	setalpha 12, 8
+	loopsewithpan SE_M_MEGA_KICK, SOUND_PAN_ATTACKER, 13, 3
+	createvisualtask AnimTask_BlendColorCycle, 2, 2, 0, 6, 0, 11, RGB(31, 31, 11)
+	call PrimalReversionParticles
+	call PrimalReversionParticles
+	call PrimalReversionParticles
+	waitforvisualfinish
+	playsewithpan SE_M_SOLAR_BEAM, SOUND_PAN_ATTACKER
+	createsprite gAlphaStoneSpriteTemplate, ANIM_ATTACKER, 41, 0, 0, 0, 0
+	delay 20
+	createvisualtask AnimTask_BlendBattleAnimPalExclude, 5, 5, 2, 0, 16, RGB_WHITEALPHA
+	waitforvisualfinish
+	createvisualtask AnimTask_TransformMon, 2, 0, 1
+	createvisualtask AnimTask_BlendBattleAnimPalExclude, 5, 5, 2, 16, 0, RGB_WHITEALPHA
+	createvisualtask AnimTask_HorizontalShake, 5, 1, 5, 14
+	waitforvisualfinish
+	createsprite gAlphaSymbolSpriteTemplate ANIM_ATTACKER, 2
+	waitforvisualfinish
+	clearmonbg ANIM_ATK_PARTNER
+	blendoff
+	end
+General_PrimalReversion_Omega:
+	loadspritegfx ANIM_TAG_OMEGA_STONE
+	loadspritegfx ANIM_TAG_PRIMAL_PARTICLES
+	loadspritegfx ANIM_TAG_OMEGA_SYMBOL
+	monbg ANIM_ATTACKER
+	setalpha 12, 8
+	loopsewithpan SE_M_MEGA_KICK, SOUND_PAN_ATTACKER, 13, 3
+	createvisualtask AnimTask_BlendColorCycle, 2, 2, 0, 6, 0, 11, RGB(31, 31, 11)
+	call PrimalReversionParticles
+	call PrimalReversionParticles
+	call PrimalReversionParticles
+	waitforvisualfinish
+	playsewithpan SE_M_SOLAR_BEAM, SOUND_PAN_ATTACKER
+	createsprite gOmegaStoneSpriteTemplate, ANIM_ATTACKER, 41, 0, 0, 0, 0
+	delay 20
+	createvisualtask AnimTask_BlendBattleAnimPalExclude, 5, 5, 2, 0, 16, RGB_WHITEALPHA
+	waitforvisualfinish
+	createvisualtask AnimTask_TransformMon, 2, 0, 1
+	createvisualtask AnimTask_BlendBattleAnimPalExclude, 5, 5, 2, 16, 0, RGB_WHITEALPHA
+	createvisualtask AnimTask_HorizontalShake, 5, 1, 5, 14
+	waitforvisualfinish
+	createsprite gOmegaSymbolSpriteTemplate ANIM_ATTACKER, 2
+	waitforvisualfinish
+	clearmonbg ANIM_ATK_PARTNER
+	blendoff
+	end
+PrimalReversionParticles:
+	createsprite gPrimalParticlesSpriteTemplate, ANIM_ATTACKER, 2, 40, -10, 13
+	delay 3
+	createsprite gPrimalParticlesSpriteTemplate, ANIM_ATTACKER, 2, -35, -10, 13
+	delay 3
+	createsprite gPrimalParticlesSpriteTemplate, ANIM_ATTACKER, 2, 15, -40, 13
+	delay 3
+	createsprite gPrimalParticlesSpriteTemplate, ANIM_ATTACKER, 2, -10, -32, 13
+	delay 3
+	createsprite gPrimalParticlesSpriteTemplate, ANIM_ATTACKER, 2, 25, -20, 13
+	delay 3
+	createsprite gPrimalParticlesSpriteTemplate, ANIM_ATTACKER, 2, -40, -20, 13
+	delay 3
+	createsprite gPrimalParticlesSpriteTemplate, ANIM_ATTACKER, 2, 5, -40, 13
+	delay 3
 	return
 
 SnatchMoveTrySwapFromSubstitute:
